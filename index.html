@@ -408,14 +408,20 @@ $("#btnBuat").onclick = async () => {
   const tekstur = $("#cbTekstur").checked;
   const space = ls.get("rp_space", "") || SPACE_DEFAULT, token = ls.get("rp_token", "");
   sibuk = true; $("#btnBuat").disabled = true; $("#prog").hidden = false;
+  let tahap = "muat";
   try {
-    setMsg("Menghubungkan ke " + space + "…");
+    setMsg("Memuat penghubung…");
     gradioMod = gradioMod || await import(GRADIO_CLIENT);
+    tahap = "sambung";
+    setMsg("Menghubungkan ke " + space + "…");
     const { Client, handle_file } = gradioMod;
     // events "status" wajib diminta, kalau tidak pesan error/antrean dari Space tidak pernah sampai
     const opsi = { events: ["data", "status"] };
     if (token) opsi.hf_token = token;
-    const client = await Client.connect(space, opsi);
+    let client;
+    try { client = await Client.connect(space, opsi); }
+    catch (e) { await new Promise((r) => setTimeout(r, 2000)); client = await Client.connect(space, opsi); } // coba sekali lagi
+    tahap = "proses";
     const f = (k) => foto[k] ? handle_file(foto[k].blob) : null;
     // Urutan input sesuai gradio_app.py Hunyuan3D-2:
     // caption, image, depan, belakang, kiri, kanan, steps, guidance, seed, octree, hapus latar, chunks, seed acak
@@ -432,8 +438,11 @@ $("#btnBuat").onclick = async () => {
     if (!file) { hasil = await jalankan(client, "/shape_generation", data); file = hasil[0]; }
     const url = file && (file.url || (file.value && file.value.url));
     if (!url) throw new Error("Space tidak mengirim file model.");
+    tahap = "unduh";
     setMsg("Mengunduh model…");
-    const r = await fetch(url, token ? { headers: { Authorization: "Bearer " + token } } : {});
+    let r;
+    try { r = await fetch(url); } // tanpa header tambahan, supaya tidak diblokir aturan CORS
+    catch (e) { await new Promise((ok) => setTimeout(ok, 1500)); r = await fetch(url); }
     if (!r.ok) throw new Error("Gagal mengunduh model (" + r.status + ").");
     const blob = new Blob([await r.arrayBuffer()], { type: "model/gltf-binary" });
     await tampilkan(blob, nama);
@@ -442,6 +451,15 @@ $("#btnBuat").onclick = async () => {
   } catch (e) {
     let t = e && e.message ? e.message : String(e);
     if (/quota|ZeroGPU|exceeded/i.test(t)) t = "Kuota GPU gratis habis. Isi token Hugging Face di Pengaturan, atau coba lagi nanti. (" + t + ")";
+    else if (/Failed to fetch|NetworkError|Load failed|dynamically imported/i.test(t)) {
+      const saran = {
+        muat: "Gagal saat memuat penghubung. Periksa internet, matikan pemblokir iklan, VPN, atau penghemat data, lalu coba buka di Chrome.",
+        sambung: "Gagal saat masuk ke Space AI. Space mungkin sedang tidur atau restart: buka huggingface.co/spaces/tencent/Hunyuan3D-2mv sekali sampai tampil, lalu coba lagi di sini.",
+        proses: "Koneksi putus saat mengunggah foto atau menyusun model. Coba lagi; kalau berulang, matikan pilihan warna dan tekstur.",
+        unduh: "Model sudah jadi, tapi gagal diunduh ke HP. Coba tekan Buat 3D sekali lagi.",
+      };
+      t = saran[tahap] + " (Kode: " + t + ")";
+    }
     setMsg(t);
   }
   sibuk = false; $("#btnBuat").disabled = false; $("#prog").hidden = true;
