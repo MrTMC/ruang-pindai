@@ -418,9 +418,28 @@ $("#btnBuat").onclick = async () => {
     // events "status" wajib diminta, kalau tidak pesan error/antrean dari Space tidak pernah sampai
     const opsi = { events: ["data", "status"] };
     if (token) opsi.hf_token = token;
-    let client;
-    try { client = await Client.connect(space, opsi); }
-    catch (e) { await new Promise((r) => setTimeout(r, 2000)); client = await Client.connect(space, opsi); } // coba sekali lagi
+    // 1) Cek kondisi Space lewat API Hugging Face
+    let st = await cekSpace(space);
+    if (st === "JARINGAN") throw new Error("HP ini tidak bisa menjangkau huggingface.co sama sekali. Coba ganti jaringan (WiFi ke data seluler atau sebaliknya), dan matikan VPN, DNS khusus, atau pemblokir iklan.");
+    if (st === "TIDAK_ADA") throw new Error("Space " + space + " tidak ditemukan. Periksa nama Space di Pengaturan.");
+    for (let i = 0; i < 18 && /SLEEPING|BUILDING|STARTING|APP_STARTING|RUNNING_BUILDING|RUNNING_APP_STARTING/.test(st); i++) {
+      setMsg("Space sedang dibangunkan, tunggu sebentar… (" + st + ")");
+      await new Promise((r) => setTimeout(r, 10000));
+      st = await cekSpace(space);
+    }
+    if (st && st !== "RUNNING") throw new Error("Space AI sedang tidak aktif di sisi Tencent (status: " + st + "). Ini di luar kendali web-mu; coba lagi nanti.");
+    // 2) Masuk ke Space: coba dengan token, kalau ditolak coba tanpa token
+    let client = null, errTerakhir = null;
+    const percobaan = token ? [opsi, { events: ["data", "status"] }] : [opsi, opsi];
+    for (let i = 0; i < percobaan.length && !client; i++) {
+      try { client = await Client.connect(space, percobaan[i]); }
+      catch (e) {
+        errTerakhir = e;
+        if (token && i === 0) setMsg("Masuk dengan token ditolak, mencoba tanpa token…");
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    if (!client) throw new Error("Space aktif, tapi menolak sambungan dari web ini. (" + (errTerakhir && errTerakhir.message) + ")");
     tahap = "proses";
     const f = (k) => foto[k] ? handle_file(foto[k].blob) : null;
     // Urutan input sesuai gradio_app.py Hunyuan3D-2:
@@ -451,7 +470,7 @@ $("#btnBuat").onclick = async () => {
   } catch (e) {
     let t = e && e.message ? e.message : String(e);
     if (/quota|ZeroGPU|exceeded/i.test(t)) t = "Kuota GPU gratis habis. Isi token Hugging Face di Pengaturan, atau coba lagi nanti. (" + t + ")";
-    else if (/Failed to fetch|NetworkError|Load failed|dynamically imported/i.test(t)) {
+    else if (/^(Failed to fetch|NetworkError|Load failed)|dynamically imported/i.test(t)) {
       const saran = {
         muat: "Gagal saat memuat penghubung. Periksa internet, matikan pemblokir iklan, VPN, atau penghemat data, lalu coba buka di Chrome.",
         sambung: "Gagal saat masuk ke Space AI. Space mungkin sedang tidur atau restart: buka huggingface.co/spaces/tencent/Hunyuan3D-2mv sekali sampai tampil, lalu coba lagi di sini.",
@@ -464,6 +483,15 @@ $("#btnBuat").onclick = async () => {
   }
   sibuk = false; $("#btnBuat").disabled = false; $("#prog").hidden = true;
 };
+async function cekSpace(space) {
+  try {
+    const r = await fetch("https://huggingface.co/api/spaces/" + space);
+    if (r.status === 404) return "TIDAK_ADA";
+    if (!r.ok) return null; // tidak bisa memastikan, lanjut saja
+    const j = await r.json();
+    return (j.runtime && j.runtime.stage) || null;
+  } catch { return "JARINGAN"; }
+}
 function thumb(blob) {
   return new Promise((res) => {
     const url = URL.createObjectURL(blob), img = new Image();
