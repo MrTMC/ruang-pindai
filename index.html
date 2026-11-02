@@ -10,8 +10,7 @@
 <!--
   Ruang Pindai — foto benda dengan panduan, lalu jadikan 3D.
   Dirangkai dari proyek open source:
-    - Hunyuan3D-2mv (Tencent)  github.com/Tencent-Hunyuan/Hunyuan3D-2   — AI multi-sudut ke 3D, dijalankan di Hugging Face Spaces
-    - @gradio/client           github.com/gradio-app/gradio             — memanggil Space langsung dari browser
+    - Hunyuan3D-2mv (Tencent)  github.com/Tencent-Hunyuan/Hunyuan3D-2   — AI multi-sudut ke 3D, panel resminya ditanam lewat embed Hugging Face Spaces
     - three.js                 github.com/mrdoob/three.js               — penampil 3D
   Cara pasang: unggah file ini ke repo GitHub, lalu aktifkan GitHub Pages.
 -->
@@ -58,6 +57,9 @@ label.f{display:block;font-weight:600;font-size:.9rem;margin-top:14px}
 .empty{border:1.5px dashed var(--line);border-radius:16px;padding:22px 18px;color:var(--muted);margin-top:14px}
 details{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
 summary{cursor:pointer;font-weight:600}
+.steps{margin:12px 0 0;padding-left:1.3em;color:var(--muted)}
+.steps li{margin:8px 0}.steps strong{color:var(--ink)}
+#panel{display:block;width:100%;height:85vh;border:1px solid var(--line);border-radius:14px;margin-top:14px;background:var(--surface)}
 footer{margin-top:48px;color:var(--muted);font-size:.85rem}
 footer a{color:inherit}
 
@@ -105,10 +107,25 @@ footer a{color:inherit}
       <span class="muted small">atau ketuk kotak di bawah untuk unggah dari galeri</span>
     </div>
     <div class="slots" id="slots"></div>
-    <label class="check"><input type="checkbox" id="cbTekstur" checked><span>Dengan warna dan tekstur<br><span class="muted small">Lebih bagus, tapi lebih lama dan lebih cepat menghabiskan kuota GPU gratis.</span></span></label>
-    <div class="row"><button class="btn primary" id="btnBuat">Buat 3D</button></div>
-    <div class="prog" id="prog" hidden><span></span></div>
+    <div class="row"><button class="btn primary" id="btnSimpanFoto">Simpan foto ke HP</button></div>
     <p class="msg" id="msg" role="status"></p>
+  </section>
+
+  <section class="sec">
+    <h2>Susun jadi 3D</h2>
+    <ol class="steps">
+      <li>Tekan <strong>Simpan foto ke HP</strong> di atas. Fotonya masuk ke folder Unduhan dengan nama berakhiran front, left, back, dan right.</li>
+      <li>Buka panel di bawah, lalu masukkan tiap foto ke kotak dengan nama yang sama: <strong>Front, Left, Back, Right</strong>.</li>
+      <li>Tekan <strong>Gen Shape</strong> dan tunggu sampai model muncul di panel.</li>
+      <li>Unduh hasilnya sebagai .glb dari panel, lalu tekan <strong>Buka file .glb</strong> di sini untuk melihat dan menyimpannya.</li>
+    </ol>
+    <div class="row">
+      <button class="btn primary" id="btnPanel">Buka panel Hunyuan3D</button>
+      <a class="btn" href="https://huggingface.co/spaces/tencent/Hunyuan3D-2mv" target="_blank" rel="noopener">Buka di tab baru</a>
+    </div>
+    <div id="panelWrap" hidden><iframe id="panel" title="Panel Hunyuan3D-2mv" allow="clipboard-write; fullscreen"></iframe></div>
+    <div class="row"><label class="btn primary">Buka file .glb<input class="vh" type="file" accept=".glb,model/gltf-binary" id="inGlb"></label></div>
+    <p class="msg" id="msgGlb" role="status"></p>
   </section>
 
   <section class="sec">
@@ -116,22 +133,11 @@ footer a{color:inherit}
     <ul class="list" id="riwayat"></ul>
   </section>
 
-  <details class="sec" id="setelan">
-    <summary>Pengaturan</summary>
-    <label class="f">Token Hugging Face (opsional)
-      <input type="password" id="inToken" placeholder="hf_..." autocomplete="off">
-    </label>
-    <p class="muted small" style="margin-top:6px">Tanpa token, kuota GPU gratis sangat kecil. Buat akun gratis di huggingface.co, lalu Settings → Access Tokens → buat token tipe Read. Token disimpan di HP ini saja.</p>
-    <label class="f">Space AI
-      <input type="text" id="inSpace" placeholder="tencent/Hunyuan3D-2mv">
-    </label>
-    <p class="muted small" style="margin-top:6px">Biarkan default. Ganti hanya kalau kelompokmu menduplikat Space sendiri.</p>
-  </details>
 
   <footer>
     Dirangkai dari proyek open source:
     <a href="https://github.com/Tencent-Hunyuan/Hunyuan3D-2">Hunyuan3D-2</a> (Tencent, lisensi non-komersial),
-    <a href="https://github.com/gradio-app/gradio">Gradio</a>, dan
+    <a href="https://huggingface.co/spaces/tencent/Hunyuan3D-2mv">Hugging Face Spaces</a>, dan
     <a href="https://github.com/mrdoob/three.js">three.js</a>.
   </footer>
 </div>
@@ -161,9 +167,6 @@ footer a{color:inherit}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script type="module">
-// Space Hunyuan3D-2mv memakai Gradio 4.44, jadi client yang cocok adalah seri 1.x (seri 2.x untuk Gradio 6)
-const GRADIO_CLIENT = "https://cdn.jsdelivr.net/npm/@gradio/client@1.19.1/dist/browser.js";
-const SPACE_DEFAULT = "tencent/Hunyuan3D-2mv";
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -372,7 +375,7 @@ async function jepret() {
 }
 function lanjut() {
   const sisa = VIEWS.findIndex((v, i) => i > langkah && !foto[v.key]);
-  if (sisa < 0) { tutupKamera(); setMsg("Empat sisi sudah difoto. Tekan Buat 3D."); return; }
+  if (sisa < 0) { tutupKamera(); setMsg("Empat sisi sudah difoto. Tekan Simpan foto ke HP."); return; }
   langkah = sisa; renderCam();
 }
 $("#btnKamera").onclick = bukaKamera;
@@ -380,118 +383,43 @@ $("#camJepret").onclick = jepret;
 $("#camLewati").onclick = lanjut;
 $("#camTutup").onclick = tutupKamera;
 
-/* ---------- Generate 3D lewat Hunyuan3D-2mv (Hugging Face Space) ---------- */
-let gradioMod = null, sibuk = false;
+/* ---------- Simpan foto, panel Hunyuan3D, dan buka hasil ---------- */
+const NAMA_FILE = { front: "front", left: "left", back: "back", right: "right" };
 function setMsg(t) { $("#msg").textContent = t; }
-$("#inToken").value = ls.get("rp_token", "");
-$("#inSpace").value = ls.get("rp_space", "");
-$("#inToken").onchange = (e) => ls.set("rp_token", e.target.value.trim());
-$("#inSpace").onchange = (e) => ls.set("rp_space", e.target.value.trim());
-
-async function jalankan(client, endpoint, data) {
-  const job = client.submit(endpoint, data);
-  for await (const m of job) {
-    if (m.type === "status") {
-      if (m.stage === "error") throw new Error(m.message || "Space mengembalikan error.");
-      if (m.stage === "pending") setMsg(m.position != null && m.position > 0 ? "Antre di posisi " + (m.position + 1) + "…" : "Menyiapkan GPU…");
-      else if (m.stage === "generating" || m.stage === "streaming") setMsg("Sedang menyusun model 3D…");
-    } else if (m.type === "data") {
-      return m.data;
-    }
-  }
-  throw new Error("Space menutup koneksi sebelum selesai. Biasanya karena GPU gratis sedang penuh atau kuota habis. Tunggu sebentar lalu coba lagi, atau isi token Hugging Face di Pengaturan.");
-}
-$("#btnBuat").onclick = async () => {
-  if (sibuk) return;
+$("#btnSimpanFoto").onclick = () => {
+  const ada = VIEWS.filter((v) => foto[v.key]);
   if (!foto.front) { setMsg("Foto tampak depan wajib ada. Foto dengan panduan atau ketuk kotak Depan."); return; }
-  const nama = $("#inNama").value.trim() || "Benda tanpa nama";
-  const tekstur = $("#cbTekstur").checked;
-  const space = ls.get("rp_space", "") || SPACE_DEFAULT, token = ls.get("rp_token", "");
-  sibuk = true; $("#btnBuat").disabled = true; $("#prog").hidden = false;
-  let tahap = "muat";
-  try {
-    setMsg("Memuat penghubung…");
-    gradioMod = gradioMod || await import(GRADIO_CLIENT);
-    tahap = "sambung";
-    setMsg("Menghubungkan ke " + space + "…");
-    const { Client, handle_file } = gradioMod;
-    // events "status" wajib diminta, kalau tidak pesan error/antrean dari Space tidak pernah sampai
-    const opsi = { events: ["data", "status"] };
-    if (token) opsi.hf_token = token;
-    // 1) Cek kondisi Space lewat API Hugging Face
-    let st = await cekSpace(space);
-    if (st === "JARINGAN") throw new Error("HP ini tidak bisa menjangkau huggingface.co sama sekali. Coba ganti jaringan (WiFi ke data seluler atau sebaliknya), dan matikan VPN, DNS khusus, atau pemblokir iklan.");
-    if (st === "TIDAK_ADA") throw new Error("Space " + space + " tidak ditemukan. Periksa nama Space di Pengaturan.");
-    for (let i = 0; i < 18 && /SLEEPING|BUILDING|STARTING|APP_STARTING|RUNNING_BUILDING|RUNNING_APP_STARTING/.test(st); i++) {
-      setMsg("Space sedang dibangunkan, tunggu sebentar… (" + st + ")");
-      await new Promise((r) => setTimeout(r, 10000));
-      st = await cekSpace(space);
-    }
-    if (st && st !== "RUNNING") throw new Error("Space AI sedang tidak aktif di sisi Tencent (status: " + st + "). Ini di luar kendali web-mu; coba lagi nanti.");
-    // 2) Masuk ke Space: coba dengan token, kalau ditolak coba tanpa token
-    let client = null, errTerakhir = null;
-    const percobaan = token ? [opsi, { events: ["data", "status"] }] : [opsi, opsi];
-    for (let i = 0; i < percobaan.length && !client; i++) {
-      try { client = await Client.connect(space, percobaan[i]); }
-      catch (e) {
-        errTerakhir = e;
-        if (token && i === 0) setMsg("Masuk dengan token ditolak, mencoba tanpa token…");
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-    }
-    if (!client) throw new Error("Space aktif, tapi menolak sambungan dari web ini. (" + (errTerakhir && errTerakhir.message) + ")");
-    tahap = "proses";
-    const f = (k) => foto[k] ? handle_file(foto[k].blob) : null;
-    // Urutan input sesuai gradio_app.py Hunyuan3D-2:
-    // caption, image, depan, belakang, kiri, kanan, steps, guidance, seed, octree, hapus latar, chunks, seed acak
-    // Space ini memakai model Turbo: 5 langkah (30 langkah membuat GPU kehabisan waktu)
-    const data = [null, null, f("front"), f("back"), f("left"), f("right"), 5, 5.0, 1234, 256, true, 8000, true];
-    let hasil, file;
-    if (tekstur) {
-      try { hasil = await jalankan(client, "/generation_all", data); file = hasil[1] || hasil[0]; }
-      catch (e) {
-        if (!/endpoint|fn_index|not found|menutup koneksi|GPU task aborted|timeout/i.test(e.message)) throw e;
-        setMsg("Tekstur tidak tersedia di Space ini, membuat bentuk saja…");
-      }
-    }
-    if (!file) { hasil = await jalankan(client, "/shape_generation", data); file = hasil[0]; }
-    const url = file && (file.url || (file.value && file.value.url));
-    if (!url) throw new Error("Space tidak mengirim file model.");
-    tahap = "unduh";
-    setMsg("Mengunduh model…");
-    let r;
-    try { r = await fetch(url); } // tanpa header tambahan, supaya tidak diblokir aturan CORS
-    catch (e) { await new Promise((ok) => setTimeout(ok, 1500)); r = await fetch(url); }
-    if (!r.ok) throw new Error("Gagal mengunduh model (" + r.status + ").");
-    const blob = new Blob([await r.arrayBuffer()], { type: "model/gltf-binary" });
-    await tampilkan(blob, nama);
-    await simpanRiwayat({ id: Date.now().toString(36), nama, dibuat: Date.now(), glb: blob, thumb: await thumb(foto.front.blob) });
-    setMsg("Selesai. Model tersimpan di HP ini.");
-  } catch (e) {
-    let t = e && e.message ? e.message : String(e);
-    if (/quota|ZeroGPU|exceeded/i.test(t)) t = "Kuota GPU gratis habis. Isi token Hugging Face di Pengaturan, atau coba lagi nanti. (" + t + ")";
-    else if (/^(Failed to fetch|NetworkError|Load failed)|dynamically imported/i.test(t)) {
-      const saran = {
-        muat: "Gagal saat memuat penghubung. Periksa internet, matikan pemblokir iklan, VPN, atau penghemat data, lalu coba buka di Chrome.",
-        sambung: "Gagal saat masuk ke Space AI. Space mungkin sedang tidur atau restart: buka huggingface.co/spaces/tencent/Hunyuan3D-2mv sekali sampai tampil, lalu coba lagi di sini.",
-        proses: "Koneksi putus saat mengunggah foto atau menyusun model. Coba lagi; kalau berulang, matikan pilihan warna dan tekstur.",
-        unduh: "Model sudah jadi, tapi gagal diunduh ke HP. Coba tekan Buat 3D sekali lagi.",
-      };
-      t = saran[tahap] + " (Kode: " + t + ")";
-    }
-    setMsg(t);
-  }
-  sibuk = false; $("#btnBuat").disabled = false; $("#prog").hidden = true;
+  const nama = slug($("#inNama").value.trim() || "benda");
+  ada.forEach((v, i) => setTimeout(() => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(foto[v.key].blob); a.download = nama + "-" + NAMA_FILE[v.key] + ".jpg";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 8000);
+  }, i * 500));
+  setMsg(ada.length + " foto disimpan ke folder Unduhan. Kalau browser bertanya soal mengunduh banyak file, pilih Izinkan.");
 };
-async function cekSpace(space) {
+$("#btnPanel").onclick = () => {
+  const f = $("#panel");
+  if (!f.getAttribute("src")) {
+    const gelap = matchMedia("(prefers-color-scheme: dark)").matches;
+    f.src = "https://tencent-hunyuan3d-2mv.hf.space/?__theme=" + (gelap ? "dark" : "light");
+  }
+  $("#panelWrap").hidden = false;
+  $("#btnPanel").textContent = "Panel sudah terbuka di bawah";
+  f.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+};
+$("#inGlb").onchange = async (e) => {
+  const file = e.target.files[0]; e.target.value = ""; if (!file) return;
+  const out = $("#msgGlb");
+  if (!/\.glb$/i.test(file.name)) { out.textContent = "Pilih file berakhiran .glb. Kalau panel mengunduh .obj, pilih format glb di bagian ekspor panel."; return; }
+  const nama = $("#inNama").value.trim() || file.name.replace(/\.glb$/i, "");
   try {
-    const r = await fetch("https://huggingface.co/api/spaces/" + space);
-    if (r.status === 404) return "TIDAK_ADA";
-    if (!r.ok) return null; // tidak bisa memastikan, lanjut saja
-    const j = await r.json();
-    return (j.runtime && j.runtime.stage) || null;
-  } catch { return "JARINGAN"; }
-}
+    const blob = new Blob([await file.arrayBuffer()], { type: "model/gltf-binary" });
+    await tampilkan(blob, nama);
+    await simpanRiwayat({ id: Date.now().toString(36), nama, dibuat: Date.now(), glb: blob, thumb: foto.front ? await thumb(foto.front.blob) : "" });
+    out.textContent = "Model tersimpan di Hasil di HP ini.";
+  } catch (err) { out.textContent = err.message; }
+};
 function thumb(blob) {
   return new Promise((res) => {
     const url = URL.createObjectURL(blob), img = new Image();
@@ -518,7 +446,7 @@ async function renderRiwayat() {
   try { semua = await tx("readonly", (s) => s.getAll()) || []; } catch {}
   semua.sort((a, b) => b.dibuat - a.dibuat);
   const ul = $("#riwayat");
-  if (!semua.length) { ul.innerHTML = '<li class="empty">Belum ada model. Foto bendamu di atas, lalu tekan Buat 3D.</li>'; return; }
+  if (!semua.length) { ul.innerHTML = '<li class="empty">Belum ada model. Foto bendamu, susun di panel Hunyuan3D, lalu buka file .glb hasilnya.</li>'; return; }
   ul.innerHTML = semua.map((m) => '<li class="item"><img src="' + esc(m.thumb) + '" alt=""><div><h3>' + esc(m.nama) + '</h3><p class="muted small">' +
     new Date(m.dibuat).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" }) + '</p><div class="row">' +
     '<button class="btn primary" data-l="' + m.id + '">Lihat 3D</button><button class="btn" data-u="' + m.id + '">Unduh</button><button class="btn ghost" data-h="' + m.id + '">Hapus</button></div></div></li>').join("");
